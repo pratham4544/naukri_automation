@@ -11,14 +11,14 @@ from typing import Dict, List, Set
 # CONFIGURATION
 # =========================
 SEARCH_URLS = [
-    "https://www.naukri.com/ai-engineer-jobs-in-pune?k=ai%20engineer&l=pune%2C%20remote&experience=2",
-    "https://www.naukri.com/machine-learning-engineer-jobs?k=machine%20learning%20engineer&experience=2",
+    "https://www.naukri.com/nlp-engineer-jobs?k=nlp%20engineer&nignbevent_src=jobsearchDeskGNB",
+    # "https://www.naukri.com/machine-learning-engineer-jobs?k=machine%20learning%20engineer&experience=2",
     # Add more search URLs here
 ]
 
 START_PAGE = 1
-END_PAGE = 1
-MAX_JOBS_PER_SEARCH = 50  # Safety limit per search URL
+END_PAGE = 10
+MAX_JOBS_PER_SEARCH = 500  # Safety limit per search URL
 
 # Async/Concurrency Settings
 MAX_CONCURRENT_JOBS = 5  # Process N jobs simultaneously

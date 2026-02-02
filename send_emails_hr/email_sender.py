@@ -37,7 +37,7 @@ class Config:
     SMTP_PORT = 587
     
     # File paths
-    CSV_FILE = "ignored/sent_emails_status.csv"
+    CSV_FILE = "output_with_emails_2.csv"
     RESUME_PDF = "ignored/Prathamesh_Resume.pdf"
     OUTPUT_CSV = "sent_emails_status.csv"
     
@@ -50,6 +50,9 @@ class Config:
     DELAY_BETWEEN_EMAILS = 2  # seconds between each email
     BATCH_SIZE = 10  # emails per batch
     BATCH_DELAY = 60  # seconds between batches
+    
+    # LLM Usage (set at runtime)
+    USE_LLM = False  # Will be set by user choice
     
     # Directories
     TEMP_DIR = "temp_resumes"
@@ -81,6 +84,32 @@ def setup_logging():
     )
     
     return logging.getLogger(__name__)
+
+
+# =============================================================================
+# DEFAULT COVER LETTER (FALLBACK)
+# =============================================================================
+
+DEFAULT_COVER_LETTER = """Dear Hiring Manager,
+
+I am writing to express my interest in the AI Engineer position at your organization. I am an AI/ML Engineer with over 2.5 years of hands-on experience in designing, developing, and deploying production-grade AI systems, with a strong focus on Generative AI and transformer-based models.
+
+My professional experience includes working extensively with Large Language Models (LLMs), Retrieval-Augmented Generation (RAG) pipelines, model fine-tuning, and semantic search systems. I have built scalable AI solutions using Python, Hugging Face, LangChain, FastAPI, and TensorFlow, and have experience deploying and maintaining these systems on cloud platforms such as AWS.
+
+I have worked on real-world AI applications including conversational AI systems, AI-driven interview platforms, document-based chatbots, and data-driven automation solutions. I am comfortable collaborating with cross-functional teams and building reliable, production-ready solutions that align with business objectives.
+
+I am highly motivated, quick to learn, and passionate about applying AI technologies to solve complex problems and deliver measurable impact. I believe my technical background, problem-solving mindset, and practical experience would allow me to contribute effectively to your team.
+
+Please find my resume attached for your review. I would welcome the opportunity to further discuss how my skills and experience align with your requirements.
+
+Thank you for your time and consideration.
+
+Kind regards,  
+Prathamesh Shete  
+AI / ML Engineer  
+Email: prathameshshete609@gmail.com  
+Phone: +91 9970939341  
+Portfolio: prathameshshete.in"""
 
 
 # =============================================================================
@@ -449,9 +478,35 @@ def main():
         logger.error("❌ No valid records to process")
         sys.exit(1)
     
+    # Ask user: Use LLM or Default content?
+    logger.info("\n" + "=" * 80)
+    logger.info("🤖 CONTENT GENERATION MODE")
+    logger.info("=" * 80)
+    print("\nChoose your email content mode:")
+    print("1. 🤖 Use LLM (AI-generated tailored resumes & cover letters)")
+    print("   - Slower but customized for each job")
+    print("   - Falls back to defaults if AI fails")
+    print("   - Requires GROQ API calls")
+    print("\n2. 📋 Use Defaults (same resume & cover letter for all)")
+    print("   - Much faster (no AI generation)")
+    print("   - Same content for every job")
+    print("   - No API costs")
+    
+    mode_choice = input("\nEnter your choice (1 or 2): ").strip()
+    
+    if mode_choice == '2':
+        Config.USE_LLM = False
+        logger.info("✅ Selected: DEFAULT mode - Using same resume & cover letter for all jobs")
+        logger.info("⚡ This will be much faster!")
+    else:
+        Config.USE_LLM = True
+        logger.info("✅ Selected: LLM mode - AI will generate tailored content for each job")
+        logger.info("⏳ This will take longer but emails will be customized")
+    
     # Confirm before proceeding
     logger.info("\n" + "=" * 80)
     logger.info(f"📧 Ready to send {len(df)} job application emails")
+    logger.info(f"📝 Mode: {'LLM (Tailored)' if Config.USE_LLM else 'DEFAULT (Same for all)'}")
     logger.info("=" * 80)
     
     response = input("\n⚠️  Do you want to proceed? (yes/no): ").strip().lower()
@@ -480,43 +535,50 @@ def main():
             'email': row['career_email'],
             'status': 'pending',
             'message': '',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'used_defaults': False
         }
         
         try:
-            # Generate cover letter
-            logger.info("📝 Generating cover letter...")
-            cover_letter = generate_cover_letter(row['job_description'], resume_text, llm, logger)
+            cover_letter = None
+            resume_pdf_path = None
+            used_defaults = False
             
-            if not cover_letter:
-                result['status'] = 'failed'
-                result['message'] = 'Failed to generate cover letter'
-                results.append(result)
-                failed += 1
-                logger.warning(f"⚠️  Skipping due to cover letter generation failure")
-                continue
+            # Check if user wants to use LLM
+            if Config.USE_LLM:
+                # Try to generate tailored cover letter
+                logger.info("📝 Generating tailored cover letter...")
+                cover_letter = generate_cover_letter(row['job_description'], resume_text, llm, logger)
+                
+                # Try to generate tailored resume
+                if cover_letter:
+                    logger.info("📄 Generating tailored resume...")
+                    resume_pdf_path = generate_tailored_resume(
+                        row['job_description'], 
+                        resume_text, 
+                        llm, 
+                        temp_dir, 
+                        idx, 
+                        logger
+                    )
+                
+                # FALLBACK: If AI generation failed, use defaults
+                if not cover_letter or not resume_pdf_path:
+                    logger.warning(f"⚠️  AI generation failed - using DEFAULT resume & cover letter")
+                    cover_letter = DEFAULT_COVER_LETTER
+                    resume_pdf_path = Config.RESUME_PDF
+                    used_defaults = True
+                    result['used_defaults'] = True
+            else:
+                # User chose to skip LLM - use defaults directly
+                logger.info(f"📋 Using DEFAULT resume & cover letter (LLM disabled)")
+                cover_letter = DEFAULT_COVER_LETTER
+                resume_pdf_path = Config.RESUME_PDF
+                used_defaults = True
+                result['used_defaults'] = True
             
-            # Generate tailored resume
-            logger.info("📄 Generating tailored resume...")
-            resume_pdf_path = generate_tailored_resume(
-                row['job_description'], 
-                resume_text, 
-                llm, 
-                temp_dir, 
-                idx, 
-                logger
-            )
-            
-            if not resume_pdf_path:
-                result['status'] = 'failed'
-                result['message'] = 'Failed to generate resume PDF'
-                results.append(result)
-                failed += 1
-                logger.warning(f"⚠️  Skipping due to resume generation failure")
-                continue
-            
-            # Send email
-            logger.info("📧 Sending email...")
+            # Send email (with tailored or default content)
+            logger.info(f"📧 Sending email{'(with defaults)' if used_defaults else ''}...")
             
             # Handle multiple emails (take first one)
             email_address = row['career_email'].split(',')[0].strip()
@@ -530,16 +592,20 @@ def main():
                 logger
             )
             
-            result['status'] = 'sent' if success else 'failed'
-            result['message'] = message
-            results.append(result)
-            
+            # Update result
             if success:
+                result['status'] = 'sent'
+                result['message'] = f"Sent successfully{' (with defaults)' if used_defaults else ''}"
+                logger.info(f"✅ Successfully sent{' (with defaults)' if used_defaults else ''}!")
                 successful += 1
             else:
-                failed += 1
+                result['status'] = 'failed'
+                result['message'] = f"Email sending failed: {message}"
                 logger.error(f"❌ {message}")
                 logger.warning(f"⚠️  Skipping and continuing to next job")
+                failed += 1
+            
+            results.append(result)
             
             # Rate limiting - add delays between emails
             if (idx + 1) % Config.BATCH_SIZE == 0:
@@ -550,6 +616,33 @@ def main():
         
         except Exception as e:
             logger.error(f"❌ Unexpected error: {str(e)}")
+            
+            # LAST RESORT: Try with defaults even after exception
+            try:
+                logger.warning(f"⚠️  Attempting final send with defaults after exception...")
+                email_address = row['career_email'].split(',')[0].strip()
+                subject = f"Application for {row['title']} at {row['company']}"
+                
+                success, message = send_email_with_retry(
+                    email_address,
+                    subject,
+                    DEFAULT_COVER_LETTER,
+                    Config.RESUME_PDF,
+                    logger
+                )
+                
+                if success:
+                    result['status'] = 'sent'
+                    result['message'] = 'Sent with defaults after error recovery'
+                    result['used_defaults'] = True
+                    logger.info(f"✅ Recovered and sent with defaults!")
+                    results.append(result)
+                    successful += 1
+                    continue
+                    
+            except Exception as recovery_error:
+                logger.error(f"❌ Recovery also failed: {str(recovery_error)}")
+            
             result['status'] = 'failed'
             result['message'] = f'Unexpected error: {str(e)}'
             results.append(result)
@@ -589,10 +682,17 @@ def main():
     # Final summary report
     elapsed_time = time.time() - start_time
     
+    # Calculate statistics
+    sent_with_defaults = sum(1 for r in results if r.get('used_defaults', False) and r['status'] == 'sent')
+    sent_tailored = successful - sent_with_defaults
+    
     logger.info("\n" + "=" * 80)
     logger.info("📊 FINAL SUMMARY")
     logger.info("=" * 80)
+    logger.info(f"📝 Mode used: {'LLM (Tailored)' if Config.USE_LLM else 'DEFAULT (Same for all)'}")
     logger.info(f"✅ Successful: {successful}")
+    logger.info(f"   📝 Sent with tailored content: {sent_tailored}")
+    logger.info(f"   📋 Sent with default content: {sent_with_defaults}")
     logger.info(f"❌ Failed: {failed}")
     logger.info(f"📧 Total processed: {len(results)}")
     logger.info(f"⏱️  Time elapsed: {elapsed_time:.2f} seconds")

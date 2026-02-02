@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 18px;
+      margin-bottom: 5px;
+    }
+    
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    
+    .container {
+      padding: 15px;
+    }
+    
+    .section {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 8px;
+    }
+    
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+    
+    .btn-success {
+      background: #48bb78;
+      color: white;
+    }
+    
+    .btn-success:hover {
+      background: #38a169;
+    }
+    
+    .btn-danger {
+      background: #f56565;
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+    
+    .btn-secondary:hover {
+      background: #cbd5e0;
+    }
+    
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: monospace;
+      resize: vertical;
+      min-height: 100px;
+    }
+    
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .stat-box {
+      background: #f7fafc;
+      padding: 10px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    
+    .stat-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #667eea;
+    }
+    
+    .stat-label {
+      font-size: 11px;
+      color: #718096;
+      margin-top: 4px;
+    }
+    
+    .status {
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    
+    .status-idle {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+    
+    .status-working {
+      background: #fef5e7;
+      color: #d97706;
+    }
+    
+    .status-success {
+      background: #d1fae5;
+      color: #059669;
+    }
+    
+    .current-job {
+      background: #edf2f7;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    
+    .current-job strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #2d3748;
+    }
+    
+    .current-job a {
+      color: #667eea;
+      text-decoration: none;
+      word-break: break-all;
+    }
+    
+    .progress {
+      margin-top: 10px;
+    }
+    
+    .progress-bar {
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s;
+    }
+    
+    .progress-text {
+      font-size: 11px;
+      color: #718096;
+      margin-top: 5px;
+      text-align: center;
+    }
+    
+    .small-text {
+      font-size: 11px;
+      color: #718096;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🤖 Job Auto Apply</h1>
+    <p>Semi-automatic application assistant</p>
+  </div>
+  
+  <div class="container">
+    <!-- Status Section -->
+    <div class="section">
+      <div id="status" class="status status-idle">
+        ⏸️ Idle - Ready to start
+      </div>
+      
+      <div id="currentJob" class="current-job" style="display: none;">
+        <strong>Current Job:</strong>
+        <a id="jobUrl" href="#" target="_blank">-</a>
+      </div>
+      
+      <div id="progress" class="progress" style="display: none;">
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <div class="progress-text">
+          <span id="progressText">0 / 0</span>
+        </div>
+      </div>
+      
+      <div class="stats">
+        <div class="stat-box">
+          <div class="stat-number" id="memoryCount">0</div>
+          <div class="stat-label">Memory Items</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="appliedCount">0</div>
+          <div class="stat-label">Applied</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Load Jobs Section -->
+    <div class="section">
+      <div class="section-title">📋 Load Jobs (CSV)</div>
+      <textarea id="jobsCsv" placeholder="Paste jobs here (flexible format):
+
+Option 1 - CSV with header:
+name,url
+AI Engineer,https://example.com/apply
+ML Engineer,https://example2.com/jobs
+
+Option 2 - Just URLs:
+https://example.com/apply
+https://example2.com/jobs
+
+Option 3 - Name and URL:
+AI Engineer https://example.com/apply
+ML Engineer https://example2.com/jobs"></textarea>
+      <button class="btn btn-primary" id="loadJobs">Load Jobs</button>
+      <div class="small-text">Format: Paste URLs or "name,url" (flexible)</div>
+    </div>
+    
+    <!-- Actions Section -->
+    <div class="section">
+      <div class="section-title">🎯 Actions</div>
+      <button class="btn btn-success" id="startApplying">Start Applying</button>
+      <button class="btn btn-secondary" id="fillCurrentPage">Fill Current Page</button>
+      <button class="btn btn-secondary" id="nextJob">Next Job</button>
+      <button class="btn btn-danger" id="stopApplying" style="display:none;">Stop</button>
+      <div class="small-text" style="margin-top: 8px;">
+        🔵 Naukri.com: Handles sidebar Q&A + saves to memory
+      </div>
+    </div>
+    
+    <!-- Memory Section -->
+    <div class="section">
+      <div class="section-title">💾 Q&A Memory</div>
+      <button class="btn btn-secondary" id="viewMemory">View Memory</button>
+      <button class="btn btn-secondary" id="exportMemory">Export Memory</button>
+      <button class="btn btn-secondary" id="importMemory">Import Memory</button>
+    </div>
+    
+    <!-- Resume & Cover Letter Section -->
+    <div class="section">
+      <div class="section-title">📄 Resume & Cover Letter</div>
+      <button class="btn btn-secondary" id="uploadResume">Upload Resume (PDF)</button>
+      <button class="btn btn-secondary" id="uploadCoverLetter">Upload Cover Letter</button>
+      <div id="filesStatus" class="small-text" style="margin-top: 10px;">
+        <div id="resumeStatus">📎 Resume: Not uploaded</div>
+        <div id="coverLetterStatus">📎 Cover Letter: Not uploaded</div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
