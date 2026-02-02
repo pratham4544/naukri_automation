@@ -17,16 +17,21 @@ SEARCH_URLS = [
 ]
 
 START_PAGE = 1
-END_PAGE = 3
-MAX_JOBS_PER_SEARCH = 500  # Safety limit per search URL
+END_PAGE = 1
+MAX_JOBS_PER_SEARCH = 50  # Safety limit per search URL
+
+# Async/Concurrency Settings
+MAX_CONCURRENT_JOBS = 5  # Process N jobs simultaneously
+MAX_BROWSER_CONTEXTS = 3  # Number of browser contexts (sessions)
 
 # Delays (in seconds)
-DELAY_BETWEEN_JOBS = (3, 6)
+DELAY_BETWEEN_JOBS = (2, 4)  # Reduced since we're running concurrently
 DELAY_BETWEEN_PAGES = (4, 7)
 DELAY_AFTER_APPLY_CLICK = 5  # Wait to detect questions/forms
 
 # Output
 OUTPUT_CSV = None  # Will be auto-generated with timestamp
+CSV_LOCK = asyncio.Lock()  # Thread-safe CSV writing
 
 
 # =========================
@@ -69,11 +74,12 @@ def get_processed_job_ids() -> Set[str]:
     return processed
 
 
-def append_to_csv(record: Dict):
-    """Append a job record to CSV"""
-    with open(OUTPUT_CSV, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
-        writer.writerow(record)
+async def append_to_csv(record: Dict):
+    """Append a job record to CSV (async with lock for thread safety)"""
+    async with CSV_LOCK:
+        with open(OUTPUT_CSV, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
+            writer.writerow(record)
 
 
 # =========================
@@ -197,13 +203,23 @@ async def detect_application_questions(page) -> bool:
 
 
 # =========================
-# PROCESS SINGLE JOB
+# PROCESS SINGLE JOB (ASYNC)
 # =========================
-async def process_job(page, job: Dict, popup_tracker: Dict, index: int, total: int) -> Dict:
-    """Process a single job: extract details and apply info"""
+async def process_job_concurrent(context, job: Dict, index: int, total: int) -> Dict:
+    """Process a single job concurrently with its own page"""
     
     job_id = job.get("jobId")
     job_url = f"https://www.naukri.com{job.get('jdURL')}"
+    
+    # Create new page for this job
+    page = await context.new_page()
+    popup_tracker = {"popup_page": None}
+    
+    def handle_popup(popup):
+        popup_tracker["popup_page"] = popup
+        print(f"    🔗 Popup detected: {popup.url}")
+    
+    page.on("popup", handle_popup)
     
     print(f"\n[{index}/{total}] Processing: {job.get('title')} at {job.get('companyName')}")
     print(f"   URL: {job_url}")
@@ -252,6 +268,7 @@ async def process_job(page, job: Dict, popup_tracker: Dict, index: int, total: i
             record["application_status"] = "already_applied"
             record["apply_type"] = "already_applied"
             print("   ⚠ Already applied")
+            await page.close()
             return record
         
         # Find apply button
@@ -274,6 +291,7 @@ async def process_job(page, job: Dict, popup_tracker: Dict, index: int, total: i
             record["apply_type"] = "no_apply_button"
             record["application_status"] = "no_button_found"
             print("   ❌ No apply button found")
+            await page.close()
             return record
         
         # Check if button has direct external link
@@ -288,10 +306,10 @@ async def process_job(page, job: Dict, popup_tracker: Dict, index: int, total: i
             record["application_status"] = "link_extracted"
             print(f"   ✓ Apply type: {record['apply_type']}")
             print(f"   ✓ Link: {href}")
+            await page.close()
             return record
         
         # Click apply button and observe behavior
-        popup_tracker["popup_page"] = None
         current_url = page.url
         
         await apply_button.click()
@@ -313,7 +331,6 @@ async def process_job(page, job: Dict, popup_tracker: Dict, index: int, total: i
             print(f"   ✓ Questions: {record['questions_asked']}")
             
             await popup_tracker["popup_page"].close()
-            popup_tracker["popup_page"] = None
             
         # Check for navigation to new page
         elif page.url != current_url:
@@ -329,9 +346,6 @@ async def process_job(page, job: Dict, popup_tracker: Dict, index: int, total: i
             print(f"   ✓ Apply type: {record['apply_type']} (redirect)")
             print(f"   ✓ Link: {apply_url}")
             print(f"   ✓ Questions: {record['questions_asked']}")
-            
-            # Go back to job page
-            await page.goto(job_url, wait_until="domcontentloaded")
             
         # Check for iframe
         else:
@@ -358,14 +372,49 @@ async def process_job(page, job: Dict, popup_tracker: Dict, index: int, total: i
         record["apply_type"] = "error"
         print(f"   ❌ Error: {str(e)[:150]}")
     
+    finally:
+        await page.close()
+    
     return record
 
 
 # =========================
-# MAIN SCRAPER
+# CONCURRENT JOB PROCESSOR
+# =========================
+async def process_jobs_batch(context, jobs: List[Dict], start_index: int, semaphore: asyncio.Semaphore) -> int:
+    """Process a batch of jobs concurrently with semaphore limit"""
+    
+    async def process_with_semaphore(job, index):
+        async with semaphore:
+            record = await process_job_concurrent(context, job, index, len(jobs))
+            
+            # Save to CSV
+            await append_to_csv(record)
+            print(f"   💾 Saved to CSV")
+            
+            # Random delay
+            await asyncio.sleep(random.uniform(*DELAY_BETWEEN_JOBS))
+            return 1
+    
+    # Create tasks for all jobs
+    tasks = [
+        process_with_semaphore(job, start_index + idx)
+        for idx, job in enumerate(jobs, 1)
+    ]
+    
+    # Run concurrently
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Count successful
+    success_count = sum(1 for r in results if not isinstance(r, Exception))
+    return success_count
+
+
+# =========================
+# MAIN SCRAPER (CONCURRENT)
 # =========================
 async def scrape_naukri_jobs():
-    """Main async scraper function"""
+    """Main async scraper function with concurrent processing"""
     
     # Initialize CSV
     init_csv_file()
@@ -373,24 +422,23 @@ async def scrape_naukri_jobs():
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
+        
+        # Create multiple contexts for parallel processing
+        contexts = []
+        for i in range(MAX_BROWSER_CONTEXTS):
+            context = await browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
             )
-        )
-        page = await context.new_page()
+            contexts.append(context)
         
-        # Popup tracker
-        popup_tracker = {"popup_page": None}
-        
-        def handle_popup(popup):
-            popup_tracker["popup_page"] = popup
-            print(f"    🔗 Popup detected: {popup.url}")
-        
-        page.on("popup", handle_popup)
+        # Use first context for login and search
+        login_context = contexts[0]
+        page = await login_context.new_page()
         
         # =========================
         # MANUAL LOGIN
@@ -410,8 +458,11 @@ async def scrape_naukri_jobs():
             if user_input == "done":
                 break
         
-        print("\n✅ Login confirmed. Starting scraping...\n")
+        print("\n✅ Login confirmed. Starting concurrent scraping...\n")
         await asyncio.sleep(2)
+        
+        # Create semaphore for limiting concurrent jobs
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
         
         # =========================
         # PROCESS EACH SEARCH URL
@@ -436,23 +487,33 @@ async def scrape_naukri_jobs():
             if skipped > 0:
                 print(f"⏭ Skipping {skipped} already processed jobs\n")
             
-            print(f"📋 Processing {len(jobs_to_process)} new jobs\n")
+            print(f"📋 Processing {len(jobs_to_process)} new jobs CONCURRENTLY (max {MAX_CONCURRENT_JOBS} at a time)\n")
             
-            # Process each job
-            for idx, job in enumerate(jobs_to_process, 1):
-                record = await process_job(
-                    page, job, popup_tracker, 
-                    idx, len(jobs_to_process)
-                )
+            if not jobs_to_process:
+                continue
+            
+            # Process jobs concurrently using round-robin across contexts
+            # Split jobs across contexts
+            context_idx = 0
+            batch_size = MAX_CONCURRENT_JOBS
+            
+            for i in range(0, len(jobs_to_process), batch_size):
+                batch = jobs_to_process[i:i + batch_size]
                 
-                # Save to CSV
-                append_to_csv(record)
-                total_scraped += 1
-                print(f"   💾 Saved to CSV (Total: {total_scraped})")
+                # Use contexts in round-robin fashion
+                context = contexts[context_idx % len(contexts)]
+                context_idx += 1
                 
-                # Random delay between jobs
-                delay = random.uniform(*DELAY_BETWEEN_JOBS)
-                await asyncio.sleep(delay)
+                print(f"\n🚀 Processing batch {i//batch_size + 1} ({len(batch)} jobs)")
+                
+                count = await process_jobs_batch(context, batch, total_scraped, semaphore)
+                total_scraped += count
+                
+                print(f"✅ Batch complete. Total scraped: {total_scraped}\n")
+        
+        # Close all contexts
+        for context in contexts:
+            await context.close()
         
         await browser.close()
         
@@ -464,6 +525,8 @@ async def scrape_naukri_jobs():
         print("=" * 70)
         print(f"✅ Total jobs scraped: {total_scraped}")
         print(f"📄 Output file: {OUTPUT_CSV}")
+        print(f"⚡ Concurrent jobs: {MAX_CONCURRENT_JOBS}")
+        print(f"🌐 Browser contexts: {MAX_BROWSER_CONTEXTS}")
         print("=" * 70)
 
 
