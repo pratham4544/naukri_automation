@@ -1,0 +1,72 @@
+2026-02-02 16:10:34,316 - INFO - ================================================================================
+2026-02-02 16:10:34,316 - INFO - 🚀 JOB APPLICATION EMAIL SENDER STARTED
+2026-02-02 16:10:34,316 - INFO - ================================================================================
+2026-02-02 16:10:34,316 - INFO - 🔍 Checking dependencies...
+2026-02-02 16:10:34,328 - INFO - ✅ Pandoc found
+2026-02-02 16:10:34,328 - INFO - ✅ All dependencies satisfied
+2026-02-02 16:10:34,328 - INFO - 🔍 Validating environment...
+2026-02-02 16:10:34,329 - INFO - ✅ GROQ API key found
+2026-02-02 16:10:34,329 - INFO - ✅ CSV file found: ignored/sent_emails_status.csv
+2026-02-02 16:10:34,329 - INFO - ✅ Resume PDF found: ignored/Prathamesh_Resume.pdf
+2026-02-02 16:10:34,330 - INFO - ✅ Temporary directory: temp_resumes
+2026-02-02 16:10:34,330 - INFO - 🤖 Initializing LLM...
+2026-02-02 16:10:34,734 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-02-02 16:10:34,762 - INFO - ✅ LLM initialized successfully
+2026-02-02 16:10:34,762 - INFO - 📄 Loading resume from: ignored/Prathamesh_Resume.pdf
+2026-02-02 16:10:34,995 - INFO - ✅ Resume loaded (4027 characters)
+2026-02-02 16:10:34,995 - INFO - 📊 Loading data from: ignored/sent_emails_status.csv
+2026-02-02 16:10:34,998 - INFO - ✅ Loaded 2 total records
+2026-02-02 16:10:34,999 - INFO - ✅ Found 2 records with emails
+2026-02-02 16:10:34,999 - INFO - ✅ Final dataset: 2 unique job applications
+2026-02-02 16:10:34,999 - INFO - 
+================================================================================
+2026-02-02 16:10:34,999 - INFO - 📧 Ready to send 2 job application emails
+2026-02-02 16:10:34,999 - INFO - ================================================================================
+2026-02-02 16:10:40,748 - INFO - 
+================================================================================
+2026-02-02 16:10:40,748 - INFO - 📨 PROCESSING JOB APPLICATIONS
+2026-02-02 16:10:40,748 - INFO - ================================================================================
+2026-02-02 16:10:40,756 - INFO - 
+--- Processing 1/2 ---
+2026-02-02 16:10:40,757 - INFO - Company: Rapid7
+2026-02-02 16:10:40,757 - INFO - Position: AI Engineer II
+2026-02-02 16:10:40,757 - INFO - Email: info@rapid7.com
+2026-02-02 16:10:40,757 - INFO - 📝 Generating cover letter...
+2026-02-02 16:10:41,495 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-02-02 16:10:41,498 - INFO - 📄 Generating tailored resume...
+2026-02-02 16:10:42,461 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-02-02 16:10:44,478 - INFO - 📧 Sending email...
+2026-02-02 16:10:50,600 - INFO - ✅ Email sent to info@rapid7.com
+2026-02-02 16:10:52,601 - INFO - 
+--- Processing 2/2 ---
+2026-02-02 16:10:52,601 - INFO - Company: Biz-metric India
+2026-02-02 16:10:52,601 - INFO - Position: GEN AI Engineer
+2026-02-02 16:10:52,601 - INFO - Email: marketing@bizmetric.com
+2026-02-02 16:10:52,601 - INFO - 📝 Generating cover letter...
+2026-02-02 16:10:54,118 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-02-02 16:10:54,120 - INFO - 📄 Generating tailored resume...
+2026-02-02 16:10:54,158 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-02-02 16:10:54,159 - INFO - Retrying request to /openai/v1/chat/completions in 6.000000 seconds
+2026-02-02 16:11:01,418 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-02-02 16:11:03,416 - INFO - 📧 Sending email...
+2026-02-02 16:11:08,964 - INFO - ✅ Email sent to marketing@bizmetric.com
+2026-02-02 16:11:10,965 - INFO - 
+================================================================================
+2026-02-02 16:11:10,965 - INFO - 💾 SAVING RESULTS
+2026-02-02 16:11:10,973 - INFO - ================================================================================
+2026-02-02 16:11:10,977 - INFO - ✅ Results saved to: sent_emails_status.csv
+2026-02-02 16:11:10,977 - INFO - 
+🧹 Cleaning up temporary files...
+2026-02-02 16:11:10,978 - INFO - ✅ Deleted 4 temporary files
+2026-02-02 16:11:10,979 - INFO - 
+================================================================================
+2026-02-02 16:11:10,979 - INFO - 📊 FINAL SUMMARY
+2026-02-02 16:11:10,979 - INFO - ================================================================================
+2026-02-02 16:11:10,979 - INFO - ✅ Successful: 2
+2026-02-02 16:11:10,979 - INFO - ❌ Failed: 0
+2026-02-02 16:11:10,979 - INFO - 📧 Total processed: 2
+2026-02-02 16:11:10,979 - INFO - ⏱️  Time elapsed: 36.66 seconds
+2026-02-02 16:11:10,979 - INFO - 📄 Results saved to: sent_emails_status.csv
+2026-02-02 16:11:10,980 - INFO - ================================================================================
+2026-02-02 16:11:10,980 - INFO - 
+✅ Process completed!

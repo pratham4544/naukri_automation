@@ -44,7 +44,7 @@ async def get_company_emails(browser, company):
 
 
 async def process_csv():
-    df = pd.read_csv("test4.csv")
+    df = pd.read_csv("ignored/naukri_jobs_20260202_135705.csv")
 
     # clean company names
     df["company"] = (
