@@ -1,0 +1,14 @@
+# Streamlit App Dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+playwright>=1.40.0
+
+# Email Sender Dependencies
+python-dotenv>=1.0.0
+langchain>=0.1.0
+langchain-groq>=0.1.0
+langchain-community>=0.0.20
+pypdf>=3.17.0
+
+# General utilities
+asyncio-compat>=0.1.0

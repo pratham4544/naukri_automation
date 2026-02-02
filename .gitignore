@@ -1,4 +1,5 @@
 .env
 .vscode
 ignored
-logs
+logs/
+temp_resumes/
