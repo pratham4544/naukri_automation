@@ -10,5 +10,3 @@ langchain-groq>=0.1.0
 langchain-community>=0.0.20
 pypdf>=3.17.0
 
-# General utilities
-asyncio-compat>=0.1.0

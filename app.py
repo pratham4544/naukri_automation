@@ -616,6 +616,82 @@ async def run_email_extractor(df: pd.DataFrame, concurrency: int, progress_conta
 # EMAIL SENDER FUNCTIONS
 # =============================================================================
 
+# LLM Cover Letter Template
+COVER_LETTER_LLM_TEMPLATE = """
+Given the following resume and job description, generate a tailored cover letter that highlights relevant skills and experiences from the resume to match the job requirements.
+
+Make it professional, concise, and engaging. Include:
+1. A strong opening that mentions the specific position and company name
+2. 2-3 paragraphs highlighting relevant experience and skills
+3. A closing paragraph expressing enthusiasm and call to action
+4. End with the sender's name and contact details
+
+Resume: {resume_text}
+Job Description: {job_description}
+Position: {position}
+Company: {company}
+Sender Name: {sender_name}
+Sender Email: {sender_email}
+
+Cover Letter:
+"""
+
+
+def load_resume_text(resume_path: str) -> Optional[str]:
+    """Load and extract text from resume PDF"""
+    if not HAS_LLM_DEPS:
+        return None
+    try:
+        loader = PyPDFLoader(resume_path)
+        docs = loader.load()
+        return " ".join([doc.page_content for doc in docs])
+    except Exception:
+        return None
+
+
+def generate_personalized_cover_letter(
+    job_description: str,
+    position: str,
+    company: str,
+    resume_text: str,
+    sender_name: str,
+    sender_email: str,
+    groq_api_key: str
+) -> Optional[str]:
+    """Generate a personalized cover letter using Groq LLM"""
+    if not HAS_LLM_DEPS or not groq_api_key:
+        return None
+
+    try:
+        llm = ChatGroq(
+            model="llama-3.1-8b-instant",
+            temperature=0,
+            max_tokens=None,
+            timeout=30,
+            max_retries=2,
+            api_key=groq_api_key
+        )
+
+        prompt = PromptTemplate(
+            template=COVER_LETTER_LLM_TEMPLATE,
+            input_variables=["resume_text", "job_description", "position", "company", "sender_name", "sender_email"]
+        )
+
+        chain = prompt | llm
+        result = chain.invoke({
+            "resume_text": resume_text,
+            "job_description": job_description or "Not provided",
+            "position": position,
+            "company": company,
+            "sender_name": sender_name,
+            "sender_email": sender_email
+        })
+
+        return result.content
+    except Exception as e:
+        return None
+
+
 def send_single_email(receiver_email: str, subject: str, body: str,
                       resume_path: str, smtp_config: dict) -> tuple:
     """Send a single email with resume attachment"""
@@ -654,7 +730,8 @@ def send_single_email(receiver_email: str, subject: str, body: str,
 
 def run_email_sender(df: pd.DataFrame, resume_path: str, smtp_config: dict,
                      sender_name: str, cover_letter_template: str,
-                     delay_between_emails: int, progress_container) -> pd.DataFrame:
+                     delay_between_emails: int, progress_container,
+                     use_llm: bool = False, groq_api_key: str = None) -> pd.DataFrame:
     """Send emails to all companies in the DataFrame"""
 
     progress_bar = progress_container.progress(0)
@@ -664,28 +741,61 @@ def run_email_sender(df: pd.DataFrame, resume_path: str, smtp_config: dict,
     df_filtered = df[df['career_email'].notna() & (df['career_email'] != '')].copy()
     df_unique = df_filtered.drop_duplicates(subset=['career_email'], keep='first')
 
-    status_text.text(f"Sending emails to {len(df_unique)} unique addresses...")
+    # Load resume text if using LLM
+    resume_text = None
+    if use_llm and groq_api_key:
+        status_text.text("Loading resume for LLM personalization...")
+        resume_text = load_resume_text(resume_path)
+        if resume_text:
+            status_text.text(f"Resume loaded. Sending personalized emails to {len(df_unique)} unique addresses...")
+        else:
+            status_text.text(f"Could not load resume text. Falling back to template. Sending to {len(df_unique)} addresses...")
+            use_llm = False
+    else:
+        status_text.text(f"Sending emails to {len(df_unique)} unique addresses...")
 
     results = []
     successful = 0
     failed = 0
+    personalized_count = 0
 
-    for idx, row in df_unique.iterrows():
+    for idx, (_, row) in enumerate(df_unique.iterrows()):
         email_address = str(row['career_email']).split(',')[0].strip()
         company = row.get('company', 'Company')
         position = row.get('title', 'Position')
+        job_description = row.get('job_description', '')
 
-        # Format cover letter
-        cover_letter = cover_letter_template.format(
-            position=position,
-            company=company,
-            sender_name=sender_name,
-            sender_email=smtp_config["sender_email"]
-        )
+        cover_letter = None
+        used_llm = False
+
+        # Try LLM-based personalization first
+        if use_llm and resume_text and groq_api_key:
+            status_text.text(f"[{idx + 1}/{len(df_unique)}] Generating personalized email for {company}...")
+            cover_letter = generate_personalized_cover_letter(
+                job_description=job_description,
+                position=position,
+                company=company,
+                resume_text=resume_text,
+                sender_name=sender_name,
+                sender_email=smtp_config["sender_email"],
+                groq_api_key=groq_api_key
+            )
+            if cover_letter:
+                used_llm = True
+                personalized_count += 1
+
+        # Fallback to template if LLM failed or not enabled
+        if not cover_letter:
+            cover_letter = cover_letter_template.format(
+                position=position,
+                company=company,
+                sender_name=sender_name,
+                sender_email=smtp_config["sender_email"]
+            )
 
         subject = f"Application for {position} at {company}"
 
-        status_text.text(f"[{idx + 1}/{len(df_unique)}] Sending to {email_address}...")
+        status_text.text(f"[{idx + 1}/{len(df_unique)}] Sending to {email_address}{'(personalized)' if used_llm else ''}...")
 
         success, message = send_single_email(
             email_address, subject, cover_letter, resume_path, smtp_config
@@ -697,6 +807,7 @@ def run_email_sender(df: pd.DataFrame, resume_path: str, smtp_config: dict,
             'email': email_address,
             'status': 'sent' if success else 'failed',
             'message': message,
+            'personalized': used_llm,
             'timestamp': datetime.now().isoformat()
         }
         results.append(result)
@@ -706,10 +817,10 @@ def run_email_sender(df: pd.DataFrame, resume_path: str, smtp_config: dict,
         else:
             failed += 1
 
-        progress_bar.progress((len(results)) / len(df_unique))
+        progress_bar.progress((idx + 1) / len(df_unique))
         time.sleep(delay_between_emails)
 
-    status_text.text(f"✅ Done! Sent: {successful}, Failed: {failed}")
+    status_text.text(f"Done! Sent: {successful}, Failed: {failed}, Personalized: {personalized_count}")
 
     return pd.DataFrame(results)
 
@@ -947,7 +1058,24 @@ def main():
             st.subheader("Email Settings")
             delay_between = st.slider("Delay between emails (seconds)", 1, 10, 2)
 
+            # LLM Personalization Toggle
+            st.subheader("Personalization")
+            use_llm = st.checkbox(
+                "Use AI-powered personalization (Groq LLM)",
+                value=False,
+                help="Generate personalized cover letters using AI based on job description and your resume"
+            )
+
+            if use_llm:
+                if not groq_api_key:
+                    st.warning("Please enter your GROQ API key in the sidebar to use personalization")
+                elif not HAS_LLM_DEPS:
+                    st.error("LLM dependencies not installed. Run: pip install langchain-groq langchain-community pypdf")
+                else:
+                    st.success("AI personalization enabled - each email will be customized!")
+
             st.subheader("Cover Letter Template")
+            st.caption("Used as fallback if AI personalization fails or is disabled")
             cover_letter = st.text_area(
                 "Template (use {position}, {company}, {sender_name}, {sender_email})",
                 value=DEFAULT_COVER_LETTER,
@@ -978,6 +1106,11 @@ def main():
             st.info(f"📊 Ready to send {len(unique_emails)} emails")
 
             if not missing_prereqs:
+                # Check if LLM is requested but not available
+                llm_ready = use_llm and groq_api_key and HAS_LLM_DEPS
+                if use_llm and not llm_ready:
+                    st.warning("LLM personalization requested but not available. Will use template instead.")
+
                 if st.button("📨 Send Applications", type="primary", use_container_width=True):
                     smtp_config = {
                         "sender_email": sender_email,
@@ -995,25 +1128,29 @@ def main():
                         sender_name,
                         cover_letter,
                         delay_between,
-                        progress_container
+                        progress_container,
+                        use_llm=llm_ready,
+                        groq_api_key=groq_api_key if llm_ready else None
                     )
 
                     st.session_state.email_sender_df = result_df
-                    st.success("✅ Email sending complete!")
+                    st.success("Email sending complete!")
         else:
             st.warning("⚠️ No data with emails available. Please extract emails first or upload a CSV.")
 
         # Display and download results
         if st.session_state.email_sender_df is not None and not st.session_state.email_sender_df.empty:
-            st.subheader("📊 Send Results")
+            st.subheader("Send Results")
             st.dataframe(st.session_state.email_sender_df, use_container_width=True, height=400)
 
             # Stats
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             sent = (st.session_state.email_sender_df["status"] == "sent").sum()
             failed = (st.session_state.email_sender_df["status"] == "failed").sum()
-            col1.metric("✅ Sent", sent)
-            col2.metric("❌ Failed", failed)
+            personalized = st.session_state.email_sender_df.get("personalized", pd.Series([False])).sum()
+            col1.metric("Sent", sent)
+            col2.metric("Failed", failed)
+            col3.metric("Personalized", int(personalized))
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             get_download_button(

@@ -37,7 +37,7 @@ class Config:
     SMTP_PORT = 587
     
     # File paths
-    CSV_FILE = "output_with_emails_2.csv"
+    CSV_FILE = "/home/pratham/Downloads/jobs_with_emails_20260203_113031.csv"
     RESUME_PDF = "ignored/Prathamesh_Resume.pdf"
     OUTPUT_CSV = "sent_emails_status.csv"
     

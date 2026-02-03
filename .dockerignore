@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+.claude
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+venv
+.venv
+env
+
+# Project specific
+.env
+ignored/
+logs/
+temp_resumes/
+*.ipynb
+chrome_extension_for_mannual_apply/
+
+# Docker
+Dockerfile
+.dockerignore

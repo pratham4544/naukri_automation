@@ -57,7 +57,16 @@ Prepare your resume as a PDF file to attach with applications.
 
 ## Quick Start
 
-### Run Streamlit App
+### Option 1: Run with Docker
+
+```bash
+docker pull paddy4544/naukri_automation:latest
+docker run -p 8501:8501 paddy4544/naukri_automation:latest
+```
+
+Then open http://localhost:8501 in your browser.
+
+### Option 2: Run Locally
 
 ```bash
 streamlit run app.py
